@@ -6,6 +6,8 @@ import 'package:path_provider/path_provider.dart';
 import 'dart:io';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:image_picker/image_picker.dart';
+import 'package:signature/signature.dart';
+import 'package:image_painter/image_painter.dart';
 
 class User {
   final String name;
@@ -22,6 +24,16 @@ class CreateContract extends StatefulWidget {
 }
 
 class _CreateContractState extends State<CreateContract> {
+  String _name = '';
+  String _firstName = '';
+  late Uint8List renterSignature;
+  late Uint8List etatsDesLieux;
+
+  final SignatureController _controller = SignatureController(
+    penStrokeWidth: 5,
+    penColor: Colors.red,
+    exportBackgroundColor: Colors.blue,
+  );
   Future<Directory?> getDirectoryImage() async {
     Directory? directory;
     if (Platform.isIOS) {
@@ -61,7 +73,7 @@ class _CreateContractState extends State<CreateContract> {
 
     final ImagePicker imagePicker = ImagePicker();
 
-    //pick file from gallery, it will return XFile
+    //pick image from gallery, it will return XFile
     final XFile? imagePicked =
         await imagePicker.pickImage(source: ImageSource.gallery);
 
@@ -102,7 +114,7 @@ class _CreateContractState extends State<CreateContract> {
                         crossAxisAlignment: pw.CrossAxisAlignment.end,
                         children: [
                           pw.Text(
-                            "Ci après le \"Loueur\",",
+                            "$_name $_firstName",
                           ),
                           pw.Text(
                             "D'une part,",
@@ -201,6 +213,14 @@ class _CreateContractState extends State<CreateContract> {
                       pw.Text("A ---, le --- "),
                       pw.SizedBox(height: 10),
                       pw.Table.fromTextArray(headers: headers, data: datas),
+                      pw.Container(
+                          height: 100,
+                          width: 100,
+                          child: pw.Image(pw.MemoryImage(renterSignature))),
+                      pw.Container(
+                          height: 400,
+                          width: 400,
+                          child: pw.Image(pw.MemoryImage(etatsDesLieux)))
                     ])
               ]),
     );
@@ -213,25 +233,106 @@ class _CreateContractState extends State<CreateContract> {
     final output = await getDirectoryImage();
 
     if (output != null) {
-      final file = File("${output.path}/testImage1445.pdf");
+      final file = File("${output.path}/testImage6545.pdf");
       await file.writeAsBytes(await pdf.save());
     }
+  }
+
+  Future<Uint8List> exportSignature() async {
+    final exportController = SignatureController(
+        penStrokeWidth: 2,
+        penColor: Colors.black,
+        exportBackgroundColor: Colors.white,
+        points: _controller.points);
+
+    final signature = await exportController.toPngBytes();
+
+    exportController.dispose();
+
+    return signature!;
+  }
+
+  final _imageKey = GlobalKey<ImagePainterState>();
+
+  Future<Uint8List> saveImage() async {
+    final image = await _imageKey.currentState!.exportImage();
+
+    return image!;
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(),
-      body: Container(
+      body: Form(
         child: Center(
-          child: Column(
-            children: [
-              ElevatedButton(
-                  onPressed: () {
-                    generatorPdf(nom: 'Niakate', prenom: 'Madi95');
+          child: SingleChildScrollView(
+            child: Column(
+              children: [
+                TextFormField(
+                  onChanged: (value) {
+                    _name = value;
                   },
-                  child: const Text('Valider')),
-            ],
+                  decoration: const InputDecoration(hintText: 'Name'),
+                ),
+                TextFormField(
+                  onChanged: (value) {
+                    _firstName = value;
+                  },
+                  decoration: const InputDecoration(hintText: 'Firstname'),
+                ),
+                Signature(
+                  controller: _controller,
+                  width: 100,
+                  height: 100,
+                  backgroundColor: Colors.lightBlueAccent,
+                ),
+                Container(
+                  child: Row(children: [
+                    IconButton(
+                        onPressed: () {
+                          if (_controller.isNotEmpty) {
+                            _controller.clear();
+                          }
+                        },
+                        icon: Icon(Icons.clear)),
+                    IconButton(
+                        onPressed: () async {
+                          if (_controller.isNotEmpty) {
+                            final signature = await exportSignature();
+
+                            renterSignature = signature;
+                          }
+                        },
+                        icon: Icon(Icons.check))
+                  ]),
+                ),
+                Container(
+                    height: 300,
+                    width: 300,
+                    child: ImagePainter.asset(
+                      "assets/voiture.jpg",
+                      key: _imageKey,
+                      scalable: true,
+                      initialStrokeWidth: 2,
+                      initialColor: Colors.green,
+                      initialPaintMode: PaintMode.line,
+                    )),
+                ElevatedButton(
+                    onPressed: () async {
+                      Uint8List imageUpdated = await saveImage();
+                      setState(() {
+                        etatsDesLieux = imageUpdated;
+                      });
+                    },
+                    child: Text('Devis')),
+                ElevatedButton(
+                    onPressed: () {
+                      generatorPdf(nom: 'Niakate', prenom: 'Madi95');
+                    },
+                    child: const Text('Valider')),
+              ],
+            ),
           ),
         ),
       ),
